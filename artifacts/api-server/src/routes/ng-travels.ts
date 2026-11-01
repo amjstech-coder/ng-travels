@@ -1957,7 +1957,7 @@ router.post("/trips", requireOwner, async (req, res): Promise<void> => {
     let lastSeq = 0;
     const nextBookingId = async (): Promise<string> => {
       const [{ maxSeq }] = await db
-        .select({ maxSeq: sql<number>`coalesce(max((substring(${tripsTable.bookingId} from ${idPrefix.length + 1}))::int), 0)` })
+        .select({ maxSeq: sql<number>`coalesce(max((substring(${tripsTable.bookingId} from ${idPrefix.length + 1}::int))::int), 0)` })
         .from(tripsTable)
         .where(sql`${tripsTable.bookingId} ~ ${`^${idPrefix}[0-9]+$`}`);
       // lastSeq keeps a retry moving forward even if the lookup returns a stale max
