@@ -18,7 +18,7 @@ import {
 import {
   User, Calendar, Navigation, IndianRupee, ShieldCheck, CheckCircle2,
   Plus, Trash2, ArrowRight, ArrowLeft, Sparkles, AlertTriangle,
-  Clock, Car, Search, Calculator, Receipt, CreditCard, MapPin, Gauge, Camera, X
+  Clock, Car, Search, Calculator, Receipt, CreditCard, MapPin, Gauge, Camera, X, Eye, EyeOff
 } from "lucide-react";
 import { TripActionLoader, ButtonLoader } from "@/components/loading";
 
@@ -84,6 +84,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
 }) => {
   const isEditing = Boolean(editingTrip);
   const [step, setStep] = useState(1);
+  const [showRouteInputs, setShowRouteInputs] = useState(true);
   const [loading, setLoading] = useState(false);
   // Blocks a second submit before the `loading` state re-render lands
   const submittingRef = React.useRef(false);
@@ -643,10 +644,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
       }
     }
     if (step === 3) {
-      if (!pickupInput.trim() || !destInput.trim()) {
-        alert("Please specify both pickup and destination locations");
-        return;
-      }
+      // Pickup and destination are optional.
       // Stand odometer + photo are mandatory for new bookings. Edits of
       // trips booked before this was required stay optional, so they can
       // still be changed without one.
@@ -804,9 +802,9 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
           routeDurationMinutes: outboundDurationMinutes + returnDurationMinutes,
           outboundDurationMinutes,
           returnDurationMinutes,
-          routeSummary: `${pickupInput} ➔ ${destInput}`,
-          selectedRouteSummary: routeOptions[selectedRouteIdx]?.summary || `${pickupInput} ➔ ${destInput}`,
-          routeOptions: routeOptionsSummary,
+          routeSummary: [pickupInput, destInput].filter(Boolean).join(" ➔ "),
+          selectedRouteSummary: routeOptions[selectedRouteIdx]?.summary || [pickupInput, destInput].filter(Boolean).join(" ➔ "),
+routeOptions: routeOptionsSummary,
           apiEstimatedToll: commercialFare.toll > 0 ? String(commercialFare.toll) : null,
           estimatedToll: commercialFare.toll > 0 ? String(commercialFare.toll) : null,
           billingKm: String(commercialFare.totalBillableDistance),
@@ -868,9 +866,9 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
           routeDurationMinutes: outboundDurationMinutes + returnDurationMinutes,
           outboundDurationMinutes,
           returnDurationMinutes,
-          routeSummary: `${pickupInput} ➔ ${destInput}`,
-          selectedRouteSummary: routeOptions[selectedRouteIdx]?.summary || `${pickupInput} ➔ ${destInput}`,
-          routeOptions: routeOptionsSummary,
+          routeSummary: [pickupInput, destInput].filter(Boolean).join(" ➔ "),
+          selectedRouteSummary: routeOptions[selectedRouteIdx]?.summary || [pickupInput, destInput].filter(Boolean).join(" ➔ "),
+routeOptions: routeOptionsSummary,
           estimatedToll: finalToll,
           billingKm: commercialFare.totalBillableDistance,
           ratePerKm,
@@ -1189,15 +1187,37 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
             {/* STEP 3: ROUTE & DIRECT DISTANCE (Map preview + 100% Dynamic & Editable) */}
             {step === 3 && (
               <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">Route & Driving Distance</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Enter pickup, destination, stops, and specify the road distance in KM.</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">Route & Driving Distance</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Enter pickup, destination, stops, and specify the road distance in KM.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowRouteInputs((v) => !v)}
+                    className="shrink-0 h-8 text-[11px] border-border cursor-pointer"
+                  >
+                    {showRouteInputs ? (
+                      <><EyeOff className="w-3.5 h-3.5 mr-1" /> Hide Locations</>
+                    ) : (
+                      <><Eye className="w-3.5 h-3.5 mr-1" /> Show Locations</>
+                    )}
+                  </Button>
                 </div>
 
+                {!showRouteInputs && (
+                  <p className="text-[11px] text-muted-foreground bg-card/40 px-3 py-2 rounded-lg border border-border truncate">
+                    {[pickupInput, ...stops.map((s) => s.name || s.address), destInput].filter(Boolean).join(" ➔ ") || "No route entered yet"}
+                  </p>
+                )}
+
                 {/* Pickup & Destination Inputs (Zero autofill) */}
+                {showRouteInputs && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-card/40 p-4 rounded-xl border border-border">
                   <LocationPicker
-                    label="Pickup Location *"
+                    label="Pickup Location (Optional)"
                     accent="emerald"
                     searchPlaceholder="Type pickup place (e.g. Kempegowda Airport, Indiranagar, MG Road)..."
                     value={pickupInput}
@@ -1211,7 +1231,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
                   />
 
                   <LocationPicker
-                    label="Destination *"
+                    label="Destination (Optional)"
                     accent="amber"
                     searchPlaceholder="Type destination (e.g. Mysore Palace, Ooty, Coorg, Chennai Central)..."
                     value={destInput}
@@ -1224,8 +1244,10 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
                     }}
                   />
                 </div>
+                )}
 
                 {/* Intermediate Stops */}
+                {showRouteInputs && (
                 <div className="space-y-2 bg-card/40 p-4 rounded-xl border border-border">
                   <label className="text-xs font-semibold text-foreground block">Waypoints & Intermediate Stops (Optional)</label>
                   <div className="relative" ref={stopSearchBoxRef}>
@@ -1297,6 +1319,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Route & Toll Map Preview (Google Maps-style, driving polyline + live toll estimate) */}
                 {pickupInput.trim() && destInput.trim() && (
