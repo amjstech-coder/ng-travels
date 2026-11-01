@@ -1361,10 +1361,30 @@ router.post("/vehicles", requireOwner, async (req, res): Promise<void> => {
 router.patch("/vehicles/:id", requireOwner, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   try {
+    // Same normalisation as POST: the form sends "" for blank optional fields,
+    // which Postgres rejects for date/integer/numeric columns.
+    const body = req.body ?? {};
+    const patch: Record<string, unknown> = {};
+    const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
+    for (const k of ["vehicleType", "brand", "model", "fuelType", "status", "maintenanceStatus"]) {
+      if (has(k) && body[k]) patch[k] = body[k];
+    }
+    if (has("vehicleNumber") && body.vehicleNumber) patch.vehicleNumber = String(body.vehicleNumber).trim().toUpperCase();
+    for (const k of [
+      "rcNumber", "insurancePolicy", "permitNumber", "fitnessCertNumber", "pollutionCertNumber", "notes",
+      "insuranceExpiry", "permitExpiry", "fitnessExpiry", "pollutionExpiry", "lastServiceDate", "nextServiceDate",
+    ]) {
+      if (has(k)) patch[k] = body[k] || null;
+    }
+    if (has("year")) patch.year = body.year ? Number(body.year) : null;
+    if (has("capacity") && body.capacity) patch.capacity = Number(body.capacity);
+    if (has("assignedDriverId")) patch.assignedDriverId = body.assignedDriverId ? Number(body.assignedDriverId) : null;
+    if (has("currentOdometerKm")) patch.currentOdometerKm = String(body.currentOdometerKm || "0");
+
     const [updated] = await db
       .update(vehiclesTable)
       .set({
-        ...req.body,
+        ...patch,
         updatedAt: new Date(),
       })
       .where(eq(vehiclesTable.id, id))

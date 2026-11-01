@@ -97854,8 +97854,35 @@ router2.post("/vehicles", requireOwner, async (req, res) => {
 router2.patch("/vehicles/:id", requireOwner, async (req, res) => {
   const id = Number(req.params.id);
   try {
+    const body = req.body ?? {};
+    const patch = {};
+    const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
+    for (const k of ["vehicleType", "brand", "model", "fuelType", "status", "maintenanceStatus"]) {
+      if (has(k) && body[k]) patch[k] = body[k];
+    }
+    if (has("vehicleNumber") && body.vehicleNumber) patch.vehicleNumber = String(body.vehicleNumber).trim().toUpperCase();
+    for (const k of [
+      "rcNumber",
+      "insurancePolicy",
+      "permitNumber",
+      "fitnessCertNumber",
+      "pollutionCertNumber",
+      "notes",
+      "insuranceExpiry",
+      "permitExpiry",
+      "fitnessExpiry",
+      "pollutionExpiry",
+      "lastServiceDate",
+      "nextServiceDate"
+    ]) {
+      if (has(k)) patch[k] = body[k] || null;
+    }
+    if (has("year")) patch.year = body.year ? Number(body.year) : null;
+    if (has("capacity") && body.capacity) patch.capacity = Number(body.capacity);
+    if (has("assignedDriverId")) patch.assignedDriverId = body.assignedDriverId ? Number(body.assignedDriverId) : null;
+    if (has("currentOdometerKm")) patch.currentOdometerKm = String(body.currentOdometerKm || "0");
     const [updated] = await db.update(vehiclesTable).set({
-      ...req.body,
+      ...patch,
       updatedAt: /* @__PURE__ */ new Date()
     }).where(eq(vehiclesTable.id, id)).returning();
     if (!updated) {
