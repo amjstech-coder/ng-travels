@@ -3503,13 +3503,13 @@ router.get("/settings", requireOwner, async (_req, res): Promise<void> => {
  * valid update-check response and can prompt the user to install this one.
  */
 const CURRENT_APP_VERSION = {
-  versionCode: 19,
-  versionName: "1.4.1",
+  versionCode: 20,
+  versionName: "1.4.2",
   // Landing page, not the APK itself: builds up to 1.3.4 open this link in a
   // Chrome Custom Tab, where APK downloads stall at 100%. The page hands the
   // download to full Chrome (see artifacts/ng-travels/public/update.html).
   url: "https://ng-travels-operations-black.vercel.app/update.html",
-  releaseNotes: "Driver email is now optional, a leftover login for a driver code no longer blocks creating a driver, and the installed app version is shown in Settings and the driver profile.",
+  releaseNotes: "Customer and driver details can now be edited, trip pickup and destination are optional, trip pricing starts at zero until the trip completes, and booking ID generation is fixed.",
 };
 const APP_VERSIONS = {
   owner: CURRENT_APP_VERSION,
