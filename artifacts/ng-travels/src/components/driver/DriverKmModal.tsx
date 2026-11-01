@@ -444,7 +444,7 @@ export const DriverKmModal: React.FC<DriverKmModalProps> = ({
                 </div>
                 <div>
                   <label className="text-[11px] text-foreground block mb-1">
-                    {commissionType === "flat" ? "Commission Amount (₹)" : "Commission (% of Customer Total)"}
+                    {commissionType === "flat" ? "Driver Bata Amount (₹)" : "Driver Bata (% of Customer Total)"}
                   </label>
                   <Input type="number" min={0} value={commissionValue} onChange={(e) => setCommissionValue(e.target.value)} className="bg-card border-border text-xs h-9 font-mono" />
                 </div>

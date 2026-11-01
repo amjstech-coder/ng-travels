@@ -1687,7 +1687,7 @@ routeOptions: routeOptionsSummary,
                     </div>
                     <div>
                       <label className="text-[11px] text-muted-foreground block mb-1">
-                        {agentCommissionType === "flat" ? "Commission Amount (₹)" : "Commission (% of Customer Total)"}
+                        {agentCommissionType === "flat" ? "Agent Amount (₹)" : "Agent Commission (%)"}
                       </label>
                       <Input
                         type="number"
