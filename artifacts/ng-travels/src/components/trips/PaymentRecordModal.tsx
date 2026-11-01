@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/apiFetch";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ export interface PaymentRecordModalProps {
   onClose: () => void;
   trip: any;
   onPaymentRecorded: (newPayment: any) => void | Promise<void>;
+  /** When set, the modal edits this existing payment instead of adding one. */
+  payment?: any | null;
 }
 
 export const PaymentRecordModal: React.FC<PaymentRecordModalProps> = ({
@@ -20,12 +22,22 @@ export const PaymentRecordModal: React.FC<PaymentRecordModalProps> = ({
   onClose,
   trip,
   onPaymentRecorded,
+  payment = null,
 }) => {
   const [amount, setAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
   const [paymentType, setPaymentType] = useState("partial");
   const [reference, setReference] = useState("");
   const [loading, setLoading] = useState(false);
+  const isEdit = Boolean(payment);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setAmount(payment ? String(Number(payment.amount)) : "");
+    setPaymentMode(payment?.method || "cash");
+    setPaymentType(payment?.paymentType || "partial");
+    setReference(payment?.reference || "");
+  }, [isOpen, payment]);
 
   if (!trip) return null;
 
@@ -38,8 +50,8 @@ export const PaymentRecordModal: React.FC<PaymentRecordModalProps> = ({
 
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/trips/${trip.id}/payments`, {
-        method: "POST",
+      const res = await apiFetch(isEdit ? `/api/payments/${payment.id}` : `/api/trips/${trip.id}/payments`, {
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: Number(amount),
@@ -57,7 +69,22 @@ export const PaymentRecordModal: React.FC<PaymentRecordModalProps> = ({
       await onPaymentRecorded(newPayment);
       onClose();
     } catch {
-      alert("Failed to record payment. Please try again.");
+      alert(isEdit ? "Failed to update payment. Please try again." : "Failed to record payment. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!payment || !window.confirm("Delete this payment entry? The trip balance will be recalculated.")) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch(`/api/payments/${payment.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete payment");
+      await onPaymentRecorded(await res.json());
+      onClose();
+    } catch {
+      alert("Failed to delete payment. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -72,7 +99,7 @@ export const PaymentRecordModal: React.FC<PaymentRecordModalProps> = ({
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
               <Receipt className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
-              Record Passenger / Client Payment
+              {isEdit ? "Edit Payment" : "Record Passenger / Client Payment"}
             </DialogTitle>
           </DialogHeader>
 
@@ -165,10 +192,21 @@ export const PaymentRecordModal: React.FC<PaymentRecordModalProps> = ({
                 <ButtonLoader label="Recording Payment..." />
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4 mr-1.5" /> Confirm Payment Receipt
+                  <CheckCircle2 className="w-4 h-4 mr-1.5" /> {isEdit ? "Save Changes" : "Confirm Payment Receipt"}
                 </>
               )}
             </Button>
+            {isEdit && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={handleDelete}
+                className="w-full border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-400 text-xs cursor-pointer"
+              >
+                Delete Payment
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -3132,7 +3132,8 @@ router.get("/trips/:id/payments", async (req, res): Promise<void> => {
 
 async function recordPaymentHandler(req: Request, res: Response): Promise<void> {
   const id = Number(req.params.id || req.body.tripId);
-  const { amount, method, paymentType, paymentDate, reference, notes } = req.body;
+  const { amount, method: methodInput, paymentMode, paymentType, paymentDate, reference, notes } = req.body;
+  const method = methodInput || paymentMode;
 
   if (!id || isNaN(id)) {
     res.status(400).json({ success: false, error: { code: "VALIDATION_ERROR", message: "Valid Trip ID is required" } });
@@ -3194,6 +3195,81 @@ async function recordPaymentHandler(req: Request, res: Response): Promise<void> 
 
 router.post("/trips/:id/payments", requireOwner, recordPaymentHandler);
 router.post("/payments", requireOwner, recordPaymentHandler);
+
+/** Re-derive a trip's paid/balance/credit from its payment rows. */
+async function resyncTripPayments(tripId: number) {
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId));
+  const rows = await db.select().from(paymentsTable).where(eq(paymentsTable.tripId, tripId));
+  const totalPaid = Math.round(rows.reduce((s, p) => s + numeric(p.amount), 0) * 100) / 100;
+  const customerTotal = numeric(trip.customerTotal);
+  const [updatedTrip] = await db
+    .update(tripsTable)
+    .set({
+      totalPaid: String(totalPaid),
+      remainingBalance: String(Math.max(0, Math.round((customerTotal - totalPaid) * 100) / 100)),
+      credit: String(Math.max(0, Math.round((totalPaid - customerTotal) * 100) / 100)),
+      updatedAt: new Date(),
+    })
+    .where(eq(tripsTable.id, tripId))
+    .returning();
+  return updatedTrip;
+}
+
+// Payment records stay editable after the trip is completed.
+router.patch("/payments/:id", requireOwner, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const { amount, method, paymentMode, paymentType, paymentDate, reference, notes } = req.body;
+  const paymentAmount = Number(amount);
+  if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+    res.status(400).json({ success: false, error: { code: "VALIDATION_ERROR", message: "Amount must be greater than zero" } });
+    return;
+  }
+  try {
+    const [existing] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Payment not found" } });
+      return;
+    }
+    const [payment] = await db
+      .update(paymentsTable)
+      .set({
+        amount: String(paymentAmount),
+        method: method || paymentMode || existing.method,
+        paymentType: paymentType || existing.paymentType,
+        paymentDate: paymentDate ? dateOnly(paymentDate) : existing.paymentDate,
+        reference: reference !== undefined ? reference || null : existing.reference,
+        notes: notes !== undefined ? notes || null : existing.notes,
+      })
+      .where(eq(paymentsTable.id, id))
+      .returning();
+    const trip = await resyncTripPayments(existing.tripId);
+    await writeAudit(req, `Edited payment ₹${existing.amount} → ₹${paymentAmount}`, "payment", id);
+    broadcastRealtimeEvent("PAYMENT_UPDATED", { tripId: existing.tripId, trip });
+    res.json({ success: true, payment, trip });
+  } catch (err: any) {
+    console.error("[payments/patch] Error:", err);
+    res.status(500).json({ success: false, error: { code: "DATABASE_ERROR", message: "Failed to update payment" } });
+  }
+});
+
+router.delete("/payments/:id", requireOwner, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  try {
+    const [existing] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Payment not found" } });
+      return;
+    }
+    await db.delete(paymentsTable).where(eq(paymentsTable.id, id));
+    const trip = await resyncTripPayments(existing.tripId);
+    await writeAudit(req, `Deleted payment ₹${existing.amount}`, "payment", id);
+    broadcastRealtimeEvent("PAYMENT_UPDATED", { tripId: existing.tripId, trip });
+    res.json({ success: true, trip });
+  } catch (err: any) {
+    console.error("[payments/delete] Error:", err);
+    res.status(500).json({ success: false, error: { code: "DATABASE_ERROR", message: "Failed to delete payment" } });
+  }
+});
 
 const EXPENSE_RECEIPTS_BUCKET = "expense-receipts";
 const receiptUpload = multer({

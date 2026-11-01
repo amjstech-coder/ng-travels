@@ -17,6 +17,7 @@ interface TripDetailPageProps {
   expenses?: any[];
   onOpenCustomerCopy: (trip: any) => void;
   onOpenPaymentModal: (trip: any) => void;
+  onEditPayment?: (trip: any, payment: any) => void;
   onOpenCancelModal: (trip: any) => void;
   onOpenEditTrip: (trip: any) => void;
   onOpenAssignDriver: (trip: any) => void;
@@ -36,6 +37,7 @@ export const TripDetailPage: React.FC<TripDetailPageProps> = ({
   expenses = [],
   onOpenCustomerCopy,
   onOpenPaymentModal,
+  onEditPayment,
   onOpenCancelModal,
   onOpenEditTrip,
   onOpenAssignDriver,
@@ -426,11 +428,10 @@ export const TripDetailPage: React.FC<TripDetailPageProps> = ({
               </div>
               <Button
                 size="sm"
-                disabled={trip.endingKm != null && Number(trip.billingKm || 0) > 0}
                 onClick={() => onOpenEndKmModal(trip)}
-                className="h-8 text-xs bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:grayscale"
+                className="h-8 text-xs bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold shrink-0"
               >
-                {trip.endingKm != null && Number(trip.billingKm || 0) > 0 ? "Billing Recorded" : "Edit Billing"}
+                Edit Billing
               </Button>
             </div>
           )}
@@ -459,8 +460,18 @@ export const TripDetailPage: React.FC<TripDetailPageProps> = ({
                       <span className="text-muted-foreground ml-2">via {p.method} ({p.paymentType})</span>
                       {p.reference && <div className="text-[11px] text-muted-foreground font-mono mt-0.5">Ref: {p.reference}</div>}
                     </div>
-                    <div className="text-right text-muted-foreground text-[11px]">
+                    <div className="flex items-center gap-2 text-right text-muted-foreground text-[11px]">
                       {new Date(p.paymentDate || p.createdAt).toLocaleDateString("en-IN")}
+                      {onEditPayment && (
+                        <button
+                          type="button"
+                          onClick={() => onEditPayment(trip, p)}
+                          title="Edit payment"
+                          className="p-1 rounded hover:bg-muted cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

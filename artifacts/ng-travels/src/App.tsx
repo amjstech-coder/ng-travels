@@ -1199,6 +1199,7 @@ function MainApp() {
   const [createEnquiryOpen, setCreateEnquiryOpen] = useState(false);
   const [customerCopyTrip, setCustomerCopyTrip] = useState<any | null>(null);
   const [paymentRecordTrip, setPaymentRecordTrip] = useState<any | null>(null);
+  const [editingPayment, setEditingPayment] = useState<any | null>(null);
   const [cancelTrip, setCancelTrip] = useState<any | null>(null);
   const [assignDriverTrip, setAssignDriverTrip] = useState<any | null>(null);
   const [receiptPayment, setReceiptPayment] = useState<{
@@ -1826,7 +1827,8 @@ function MainApp() {
                     payments={tripPayments}
                     expenses={tripExpenses}
                     onOpenCustomerCopy={(trip) => setCustomerCopyTrip(trip)}
-                    onOpenPaymentModal={(trip) => setPaymentRecordTrip(trip)}
+                    onOpenPaymentModal={(trip) => { setEditingPayment(null); setPaymentRecordTrip(trip); }}
+                    onEditPayment={(trip, payment) => { setEditingPayment(payment); setPaymentRecordTrip(trip); }}
                     onOpenCancelModal={(trip) => setCancelTrip(trip)}
                     onOpenEditTrip={(trip) => setEditingTrip(trip)}
                     onOpenAssignDriver={(trip) => setAssignDriverTrip(trip)}
@@ -1993,8 +1995,9 @@ function MainApp() {
 
       <PaymentRecordModal
         isOpen={Boolean(paymentRecordTrip)}
-        onClose={() => setPaymentRecordTrip(null)}
+        onClose={() => { setPaymentRecordTrip(null); setEditingPayment(null); }}
         trip={paymentRecordTrip}
+        payment={editingPayment}
         onPaymentRecorded={async () => {
           await Promise.all([
             qc.invalidateQueries({ queryKey: ["/api/trips"] }),
