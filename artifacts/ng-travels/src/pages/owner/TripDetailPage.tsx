@@ -608,6 +608,12 @@ export const TripDetailPage: React.FC<TripDetailPageProps> = ({
                 <span className="text-muted-foreground">State Permit Charges</span>
                 <span className="font-mono text-foreground">{formatINR(trip.permitCharge)}</span>
               </div>
+              {Number(trip.driverBata || 0) > 0 && (
+                <div className="flex justify-between py-1.5">
+                  <span className="text-muted-foreground">Driver Bata</span>
+                  <span className="font-mono text-foreground">{formatINR(trip.driverBata)}</span>
+                </div>
+              )}
               {Number(trip.waitingCharge || 0) > 0 && (
                 <div className="flex justify-between py-1.5">
                   <span className="text-muted-foreground">Waiting Charges</span>
