@@ -98267,7 +98267,8 @@ router2.post("/trips", requireOwner, async (req, res) => {
       outboundDistanceKm: verifiedOutboundKm,
       returnDistanceKm: verifiedReturnKm,
       totalRoadDistanceKm: verifiedTotalKm,
-      ratePerKm: Number(req.body.ratePerKm || 18),
+      // No rate until the trip ends and the bill is entered.
+      ratePerKm: Number(req.body.ratePerKm || 0),
       pricingMode: req.body.pricingMode === "package" ? "package" : "per_km",
       packageTotal: Number(req.body.packageTotal || 0),
       startDate: startDateStr,
@@ -98301,7 +98302,7 @@ router2.post("/trips", requireOwner, async (req, res) => {
     const idPrefix = `NG-${fyPrefix}`;
     let lastSeq = 0;
     const nextBookingId = async () => {
-      const [{ maxSeq }] = await db.select({ maxSeq: sql`coalesce(max((substring(${tripsTable.bookingId} from ${idPrefix.length + 1}))::int), 0)` }).from(tripsTable).where(sql`${tripsTable.bookingId} ~ ${`^${idPrefix}[0-9]+$`}`);
+      const [{ maxSeq }] = await db.select({ maxSeq: sql`coalesce(max((substring(${tripsTable.bookingId} from ${idPrefix.length + 1}::int))::int), 0)` }).from(tripsTable).where(sql`${tripsTable.bookingId} ~ ${`^${idPrefix}[0-9]+$`}`);
       lastSeq = Math.max(Number(maxSeq), lastSeq) + 1;
       return `${idPrefix}${String(lastSeq).padStart(3, "0")}`;
     };
@@ -99448,13 +99449,13 @@ router2.get("/settings", requireOwner, async (_req, res) => {
   res.json(await settingsView());
 });
 var CURRENT_APP_VERSION = {
-  versionCode: 19,
-  versionName: "1.4.1",
+  versionCode: 20,
+  versionName: "1.4.2",
   // Landing page, not the APK itself: builds up to 1.3.4 open this link in a
   // Chrome Custom Tab, where APK downloads stall at 100%. The page hands the
   // download to full Chrome (see artifacts/ng-travels/public/update.html).
   url: "https://ng-travels-operations-black.vercel.app/update.html",
-  releaseNotes: "Driver email is now optional, a leftover login for a driver code no longer blocks creating a driver, and the installed app version is shown in Settings and the driver profile."
+  releaseNotes: "Customer and driver details can now be edited, trip pickup and destination are optional, trip pricing starts at zero until the trip completes, and booking ID generation is fixed."
 };
 var APP_VERSIONS = {
   owner: CURRENT_APP_VERSION,
