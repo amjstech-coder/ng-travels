@@ -186,7 +186,9 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
   // Step 4: Commercial Pricing Parameters
   const [pricingMode, setPricingMode] = useState<"per_km" | "package">("per_km");
   const [packageTotal, setPackageTotal] = useState(0);
-  const [ratePerKm, setRatePerKm] = useState(defaultRate);
+  // The fare is only worked out when the trip ends and the bill is entered,
+  // so a new booking carries no rate.
+  const [ratePerKm, setRatePerKm] = useState(0);
   const [driverCommissionType, setDriverCommissionType] = useState<"percentage" | "flat">("percentage");
   const [driverCommissionValue, setDriverCommissionValue] = useState(0);
   const [agentName, setAgentName] = useState("");
@@ -444,7 +446,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
 
       setPricingMode(editingTrip.pricingMode === "package" ? "package" : "per_km");
       setPackageTotal(Number(editingTrip.packageTotal || 0));
-      setRatePerKm(Number(editingTrip.ratePerKm || defaultRate));
+      setRatePerKm(Number(editingTrip.ratePerKm || 0));
       setDriverCommissionType(editingTrip.driverCommissionType === "flat" ? "flat" : "percentage");
       setDriverCommissionValue(Number(editingTrip.driverCommissionValue || 0));
       setAgentName(editingTrip.agentName || "");
@@ -509,7 +511,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
 
       setPricingMode("per_km");
       setPackageTotal(0);
-      setRatePerKm(defaultRate);
+      setRatePerKm(0);
       setDriverCommissionType("percentage");
       setDriverCommissionValue(0);
       setAgentName("");

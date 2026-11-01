@@ -1912,7 +1912,8 @@ router.post("/trips", requireOwner, async (req, res): Promise<void> => {
       outboundDistanceKm: verifiedOutboundKm,
       returnDistanceKm: verifiedReturnKm,
       totalRoadDistanceKm: verifiedTotalKm,
-      ratePerKm: Number(req.body.ratePerKm || 18),
+      // No rate until the trip ends and the bill is entered.
+      ratePerKm: Number(req.body.ratePerKm || 0),
       pricingMode: req.body.pricingMode === "package" ? "package" : "per_km",
       packageTotal: Number(req.body.packageTotal || 0),
       startDate: startDateStr,
