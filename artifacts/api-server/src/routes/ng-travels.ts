@@ -1,5 +1,4 @@
 import { Router, type Request, type Response } from "express";
-import multer from "multer";
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
@@ -33,23 +32,10 @@ import {
   validateOdometer,
 } from "../lib/financialEngine.js";
 import { searchPlaces, calculateRouteJourney, reverseGeocode, resolveLocationInput } from "../lib/routeService.js";
-import { addRealtimeClient, broadcastRealtimeEvent } from "../lib/realtime.js";
+import { broadcastRealtimeEvent } from "../lib/realtime.js";
 import { memTrips, memSettings } from "../lib/memoryStore.js";
 
 const router = Router();
-
-// =============================================================
-// SERVER-SENT EVENTS (SSE) REALTIME SUBSCRIPTION STREAM
-// =============================================================
-router.get("/realtime/stream", (req: Request, res: Response): void => {
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    "Connection": "keep-alive",
-    "X-Accel-Buffering": "no",
-  });
-  addRealtimeClient(res);
-});
 
 // =============================================================
 // HELPER FUNCTIONS & FORMATTERS
@@ -1895,10 +1881,6 @@ router.post("/trips", requireOwner, async (req, res): Promise<void> => {
       res.status(400).json({ success: false, error: { code: "VALIDATION_ERROR", message: "Odometer reading at the stand is required." } });
       return;
     }
-    if (!req.body.standStartPhoto) {
-      res.status(400).json({ success: false, error: { code: "VALIDATION_ERROR", message: "Odometer photo at the stand is required." } });
-      return;
-    }
 
     // 1. Authoritative Route Verification
     let journey: any = null;
@@ -3271,107 +3253,6 @@ router.delete("/payments/:id", requireOwner, async (req, res): Promise<void> => 
   }
 });
 
-const EXPENSE_RECEIPTS_BUCKET = "expense-receipts";
-const receiptUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 }, // 8MB — a phone photo or a scanned PDF, not a video
-  fileFilter: (_req, file, cb) => {
-    const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"];
-    cb(null, allowed.includes(file.mimetype));
-  },
-});
-
-/**
- * Upload a driver's proof-of-payment (photo or PDF) for an expense claim.
- * Uses the service-role Supabase client so it bypasses Storage RLS entirely
- * — no bucket policy is required, only the bucket itself needs to exist.
- */
-router.post("/expenses/upload-receipt", receiptUpload.single("file"), async (req, res): Promise<void> => {
-  if (!req.file) {
-    res.status(400).json({
-      success: false,
-      error: { code: "VALIDATION_ERROR", message: "No file received, or the file type isn't supported (JPG/PNG/WEBP/HEIC/PDF only)." },
-    });
-    return;
-  }
-
-  try {
-    const viewer = await viewerFor(req);
-    const ext = (req.file.originalname.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
-    const path = `${viewer?.driverId || "unknown"}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-    const { error: uploadError } = await supabaseServer.storage
-      .from(EXPENSE_RECEIPTS_BUCKET)
-      .upload(path, req.file.buffer, { contentType: req.file.mimetype, upsert: false, cacheControl: "31536000" });
-
-    if (uploadError) {
-      console.error("[expenses/upload-receipt] Storage upload error:", uploadError);
-      res.status(500).json({
-        success: false,
-        error: { code: "STORAGE_ERROR", message: "Unable to store the receipt. Please try again." },
-      });
-      return;
-    }
-
-    const { data: publicUrlData } = supabaseServer.storage.from(EXPENSE_RECEIPTS_BUCKET).getPublicUrl(path);
-    res.json({ success: true, url: publicUrlData.publicUrl, path });
-  } catch (err: any) {
-    console.error("[expenses/upload-receipt] Error:", err);
-    res.status(500).json({ success: false, error: { code: "SERVER_ERROR", message: "Unable to upload the receipt." } });
-  }
-});
-
-const ODOMETER_PHOTOS_BUCKET = "odometer-photos";
-const odometerPhotoUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 }, // 8MB — a single camera photo, not a video
-  fileFilter: (_req, file, cb) => {
-    const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
-    cb(null, allowed.includes(file.mimetype));
-  },
-});
-
-/**
- * Upload a starting/ending odometer photo captured live from the device
- * camera (the client only ever offers a camera capture, never a gallery
- * picker, so this is proof the meter was actually photographed at that
- * moment) for the Start Trip / Complete Trip KM entry step.
- */
-router.post("/driver/trips/upload-km-photo", odometerPhotoUpload.single("file"), async (req, res): Promise<void> => {
-  if (!req.file) {
-    res.status(400).json({
-      success: false,
-      error: { code: "VALIDATION_ERROR", message: "No photo received, or the file type isn't supported (JPG/PNG/WEBP/HEIC only)." },
-    });
-    return;
-  }
-
-  try {
-    const viewer = await viewerFor(req);
-    const ext = (req.file.originalname.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
-    const path = `${viewer?.driverId || viewer?.id || "unknown"}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-    const { error: uploadError } = await supabaseServer.storage
-      .from(ODOMETER_PHOTOS_BUCKET)
-      .upload(path, req.file.buffer, { contentType: req.file.mimetype, upsert: false, cacheControl: "31536000" });
-
-    if (uploadError) {
-      console.error("[driver/trips/upload-km-photo] Storage upload error:", uploadError);
-      res.status(500).json({
-        success: false,
-        error: { code: "STORAGE_ERROR", message: "Unable to store the odometer photo. Please try again." },
-      });
-      return;
-    }
-
-    const { data: publicUrlData } = supabaseServer.storage.from(ODOMETER_PHOTOS_BUCKET).getPublicUrl(path);
-    res.json({ success: true, url: publicUrlData.publicUrl, path });
-  } catch (err: any) {
-    console.error("[driver/trips/upload-km-photo] Error:", err);
-    res.status(500).json({ success: false, error: { code: "SERVER_ERROR", message: "Unable to upload the odometer photo." } });
-  }
-});
-
 router.get("/expenses", async (_req, res): Promise<void> => {
   try {
     const rows = await db.select().from(tripExpensesTable).orderBy(desc(tripExpensesTable.createdAt)).limit(500);
@@ -3390,13 +3271,6 @@ router.post("/expenses", async (req, res): Promise<void> => {
     res.status(400).json({ success: false, error: { code: "VALIDATION_ERROR", message: "Expense amount must be positive" } });
     return;
   }
-  // Enforced server-side, not just in the driver app's UI — a proof of
-  // payment is mandatory for every expense claim, whatever client submits it.
-  if (!receiptPath || typeof receiptPath !== "string" || !receiptPath.trim()) {
-    res.status(400).json({ success: false, error: { code: "VALIDATION_ERROR", message: "A proof of payment (receipt photo or PDF) is required." } });
-    return;
-  }
-
   try {
     const viewer = await viewerFor(req);
     const [expense] = await db

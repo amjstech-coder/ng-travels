@@ -59,10 +59,6 @@ const toPickerLocation = (loc: any) => {
 const locationText = (loc: any) =>
   typeof loc === "string" ? loc : loc?.address || loc?.name || "";
 
-// Same limits the /driver/trips/upload-km-photo endpoint enforces
-const MAX_ODOMETER_PHOTO_BYTES = 8 * 1024 * 1024;
-const ACCEPTED_ODOMETER_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
-
 const WIZARD_STEPS = [
   "Customer",
   "Trip Schedule",
@@ -145,44 +141,9 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
   // just hidden when that option is selected (see `displayedTollPlazas`).
   const [primaryTollPlazas, setPrimaryTollPlazas] = useState<any[]>([]);
 
-  // Vehicle odometer when it leaves the stand (+ photo proof). Kept apart
+  // Vehicle odometer when it leaves the stand . Kept apart
   // from the driver's pickup reading so stand -> pickup KM can be tracked.
   const [odometerKm, setOdometerKm] = useState("");
-  const [odometerPhotoFile, setOdometerPhotoFile] = useState<File | null>(null);
-  const [odometerPhotoPreview, setOdometerPhotoPreview] = useState<string | null>(null);
-  const [odometerPhotoUrl, setOdometerPhotoUrl] = useState<string | null>(null);
-  const odometerFileInputRef = React.useRef<HTMLInputElement>(null);
-
-  const clearOdometerPhotoFile = () => {
-    setOdometerPhotoFile(null);
-    setOdometerPhotoPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-  };
-
-  const handlePickOdometerPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-picking the same photo after removing it
-    if (!file) return;
-    if (!ACCEPTED_ODOMETER_PHOTO_TYPES.includes(file.type)) {
-      alert("Unsupported photo format — please use a JPG, PNG, WEBP or HEIC image.");
-      return;
-    }
-    if (file.size > MAX_ODOMETER_PHOTO_BYTES) {
-      alert("That photo is too large — it must be under 8MB.");
-      return;
-    }
-    clearOdometerPhotoFile();
-    setOdometerPhotoFile(file);
-    setOdometerPhotoPreview(URL.createObjectURL(file));
-  };
-
-  const handleRemoveOdometerPhoto = () => {
-    clearOdometerPhotoFile();
-    setOdometerPhotoUrl(null);
-  };
-
   // Step 4: Commercial Pricing Parameters
   const [pricingMode, setPricingMode] = useState<"per_km" | "package">("per_km");
   const [packageTotal, setPackageTotal] = useState(0);
@@ -464,8 +425,6 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
       setSelectedDriverId(editingTrip.driverId ?? null);
       setSelectedVehicleId(editingTrip.vehicleId ?? null);
       setOdometerKm(editingTrip.standStartKm != null ? String(editingTrip.standStartKm) : "");
-      setOdometerPhotoUrl(editingTrip.standStartPhoto || null);
-      clearOdometerPhotoFile();
       // Advance/payment collection is handled by the dedicated Record Payment
       // flow, not re-run here — editing a trip must never silently log a
       // second advance payment.
@@ -533,8 +492,6 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
       setPaymentReference("");
 
       setOdometerKm("");
-      setOdometerPhotoUrl(null);
-      clearOdometerPhotoFile();
 
       // Applied after the reset above so it isn't wiped by it.
       if (initialEnquiry) applyPrefill(initialEnquiry);
@@ -647,28 +604,15 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
     }
     if (step === 3) {
       // Pickup and destination are optional.
-      // Stand odometer + photo are mandatory for new bookings. Edits of
+      // Stand odometer is mandatory for new bookings. Edits of
       // trips booked before this was required stay optional, so they can
       // still be changed without one.
-      const hasOdometerPhoto = Boolean(odometerPhotoFile || odometerPhotoUrl);
       if (!isEditing && odometerKm.trim() === "") {
         alert("Please enter the odometer reading at the stand");
         return;
       }
       if (odometerKm.trim() !== "" && (!Number.isFinite(Number(odometerKm)) || Number(odometerKm) <= 0)) {
         alert("Odometer reading must be a valid positive number");
-        return;
-      }
-      if (!isEditing && !hasOdometerPhoto) {
-        alert("Please upload a photo of the odometer reading");
-        return;
-      }
-      if (hasOdometerPhoto && odometerKm.trim() === "") {
-        alert("Please enter the odometer reading shown in the photo");
-        return;
-      }
-      if (odometerKm.trim() !== "" && !hasOdometerPhoto) {
-        alert("Please upload a photo of the odometer reading");
         return;
       }
     }
@@ -750,23 +694,8 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
         return;
       }
 
-      let standStartPhoto = odometerPhotoUrl;
-      if (odometerPhotoFile) {
-        const formData = new FormData();
-        formData.append("file", odometerPhotoFile);
-        const uploadRes = await apiFetch("/api/driver/trips/upload-km-photo", {
-          method: "POST",
-          body: formData,
-        });
-        if (!uploadRes.ok) {
-          const errData = await uploadRes.json().catch(() => null);
-          throw new Error(errData?.error?.message || "Failed to upload the odometer photo.");
-        }
-        standStartPhoto = (await uploadRes.json()).url;
-        // Keep the uploaded URL so a retry after a failed save doesn't re-upload
-        setOdometerPhotoUrl(standStartPhoto);
-        clearOdometerPhotoFile();
-      }
+      // Existing photo links on old bookings are preserved as-is
+      const standStartPhoto = editingTrip?.standStartPhoto ?? null;
       const standStartKm = odometerKm.trim() !== "" ? Number(odometerKm) : null;
 
       // Route choices without their map polylines: nothing reads the
@@ -1483,8 +1412,8 @@ routeOptions: routeOptionsSummary,
                     </div>
                   </div>
 
-                  {/* Odometer when leaving the stand + Photo */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-amber-300/60 dark:border-amber-500/20">
+                  {/* Odometer when leaving the stand */}
+                  <div className="grid grid-cols-1 gap-3 pt-3 border-t border-amber-300/60 dark:border-amber-500/20">
                     <div>
                       <label className="text-[11px] text-foreground mb-1 flex items-center gap-1">
                         <Gauge className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" /> Odometer at Stand (KM){!isEditing && " *"}
@@ -1501,63 +1430,6 @@ routeOptions: routeOptionsSummary,
                       <p className="text-[10px] text-muted-foreground mt-1">
                         Meter when leaving the stand. Used to track stand → pickup KM (not billed).
                       </p>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="text-[11px] text-foreground mb-1 flex items-center gap-1">
-                        <Camera className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" /> Stand Odometer Photo{!isEditing && " *"}
-                      </label>
-                      <input
-                        ref={odometerFileInputRef}
-                        type="file"
-                        accept={ACCEPTED_ODOMETER_PHOTO_TYPES.join(",")}
-                        onChange={handlePickOdometerPhoto}
-                        className="hidden"
-                      />
-                      {odometerPhotoPreview || odometerPhotoUrl ? (
-                        <div className="flex items-center gap-3">
-                          <a
-                            href={odometerPhotoPreview || odometerPhotoUrl || undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block shrink-0"
-                          >
-                            <img
-                              src={odometerPhotoPreview || odometerPhotoUrl || undefined}
-                              alt="Odometer"
-                              className="h-16 w-24 object-cover rounded-lg border border-border"
-                            />
-                          </a>
-                          <div className="flex flex-col gap-1.5">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => odometerFileInputRef.current?.click()}
-                              className="h-7 text-[11px] border-border cursor-pointer"
-                            >
-                              <Camera className="w-3 h-3 mr-1" /> Replace
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              onClick={handleRemoveOdometerPhoto}
-                              className="h-7 text-[11px] text-rose-700 dark:text-rose-400 cursor-pointer"
-                            >
-                              <X className="w-3 h-3 mr-1" /> Remove
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => odometerFileInputRef.current?.click()}
-                          className="w-full h-10 border-dashed border-amber-300 dark:border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs cursor-pointer hover:bg-amber-100 hover:dark:bg-amber-400/10"
-                        >
-                          <Camera className="w-3.5 h-3.5 mr-1.5" /> Capture / Upload Odometer Photo
-                        </Button>
-                      )}
                     </div>
                   </div>
                 </div>

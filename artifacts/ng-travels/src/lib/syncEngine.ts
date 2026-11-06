@@ -52,7 +52,6 @@ class SyncEngine {
   private lastSyncTime?: string;
   private errorMessage?: string;
   private listeners: Set<(state: SyncState) => void> = new Set();
-  private eventSource: EventSource | null = null;
   private initialized = false;
 
   constructor() {
@@ -177,7 +176,6 @@ class SyncEngine {
           this.errorMessage = undefined;
           this.lastSyncTime = new Date().toLocaleTimeString();
           this.notify();
-          this.startRemoteSSE();
           return true;
         }
       }
@@ -193,46 +191,7 @@ class SyncEngine {
     this.lastSyncTime = new Date().toLocaleTimeString();
     this.notify();
 
-    this.startRemoteSSE();
     return true;
-  }
-
-  private startRemoteSSE() {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-
-    try {
-      const isAbsolute = this.serverUrl.startsWith("http");
-      const sseUrl = isAbsolute ? `${this.serverUrl}/api/realtime/stream` : `/api/realtime/stream`;
-
-      this.eventSource = new EventSource(sseUrl);
-
-      this.eventSource.onopen = () => {
-        this.status = "connected";
-        this.lastSyncTime = new Date().toLocaleTimeString();
-        this.notify();
-      };
-
-      this.eventSource.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          this.lastSyncTime = new Date().toLocaleTimeString();
-          window.dispatchEvent(new CustomEvent("ng_realtime_sync", { detail: payload }));
-          this.notify();
-        } catch {}
-      };
-
-      this.eventSource.onerror = () => {
-        if (this.status === "connected") {
-          this.status = "connecting";
-          this.notify();
-        }
-      };
-    } catch (e) {
-      console.warn("[SyncEngine] Failed to initialize SSE:", e);
-    }
   }
 
   // -------------------------------------------------------------

@@ -48,7 +48,7 @@ const TABLE_KEYS: Record<string, string[]> = {
   notifications: ["/api/notifications"],
 };
 
-// The SSE event and the Supabase change for the same edit arrive within
+// The broadcast event and the Supabase change for the same edit arrive within
 // moments of each other; collect keys briefly and refetch each once.
 const INVALIDATE_DEBOUNCE_MS = 400;
 
@@ -78,26 +78,8 @@ export function useRealtimeSync() {
       setStatus(state.status);
     });
 
-    // 2. Connect Supabase Realtime PostgreSQL Change Stream (ddysnnfnzlhiidxkuvmh)
-    let supabaseChannel: any = null;
-    try {
-      let channel = supabase.channel("ng_travels_realtime_changes");
-      for (const [table, keys] of Object.entries(TABLE_KEYS)) {
-        channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () =>
-          scheduleInvalidate(keys),
-        );
-      }
-      supabaseChannel = channel.subscribe((subStatus) => {
-        if (subStatus === "SUBSCRIBED") {
-          setStatus("connected");
-        }
-      });
-    } catch (e) {
-      console.warn("[Realtime] Supabase Realtime client initialization notice:", e);
-    }
-
-    // 3. Listen to local operational broadcast events
-    const handleRealtimeEvent = (event: CustomEvent<any>) => {
+    // Operational events broadcast by the API through Supabase Realtime
+    const handleRealtimeEvent = (event: { detail: any }) => {
       try {
         const { type, payload } = event.detail || {};
 
@@ -137,7 +119,26 @@ export function useRealtimeSync() {
       }
     };
 
-    window.addEventListener("ng_realtime_sync", handleRealtimeEvent as EventListener);
+    // 2. Supabase Realtime: table changes + API broadcast events
+    let supabaseChannel: any = null;
+    try {
+      let channel = supabase.channel("ng_travels_realtime_changes");
+      for (const [table, keys] of Object.entries(TABLE_KEYS)) {
+        channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () =>
+          scheduleInvalidate(keys),
+        );
+      }
+      channel = channel.on("broadcast", { event: "message" }, ({ payload }) =>
+        handleRealtimeEvent({ detail: payload }),
+      );
+      supabaseChannel = channel.subscribe((subStatus) => {
+        if (subStatus === "SUBSCRIBED") {
+          setStatus("connected");
+        }
+      });
+    } catch (e) {
+      console.warn("[Realtime] Supabase Realtime client initialization notice:", e);
+    }
 
     return () => {
       if (flushTimer) clearTimeout(flushTimer);
@@ -147,7 +148,6 @@ export function useRealtimeSync() {
           supabase.removeChannel(supabaseChannel);
         } catch {}
       }
-      window.removeEventListener("ng_realtime_sync", handleRealtimeEvent as EventListener);
     };
   }, [queryClient]);
 

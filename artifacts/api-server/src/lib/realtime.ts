@@ -1,5 +1,3 @@
-import type { Response } from "express";
-
 export type RealtimeEventType =
   | "TRIP_CREATED"
   | "TRIP_UPDATED"
@@ -32,52 +30,54 @@ export interface RealtimeMessage {
   timestamp: string;
 }
 
-const clients = new Set<Response>();
+const supabaseUrl = (
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  "https://nihoyzdepvqkypvwpvvy.supabase.co"
+).trim();
 
-/**
- * Register a new Server-Sent Events client connection
- */
-export function addRealtimeClient(res: Response): void {
-  clients.add(res);
+const supabaseKey = (
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  ""
+).trim();
 
-  // Send initial connection handshake
-  res.write(`event: connected\ndata: ${JSON.stringify({ status: "connected", timestamp: new Date().toISOString() })}\n\n`);
+export const REALTIME_TOPIC = "ng_travels_realtime_changes";
 
-  res.on("close", () => {
-    clients.delete(res);
-  });
+// Only these small, non-sensitive fields are sent. The channel is readable by
+// anyone holding the public anon key, so customer details, phone numbers and
+// full trip records must never go out here — clients refetch via the
+// authenticated API when they hear an event.
+const SAFE_FIELDS = ["id", "tripId", "bookingId", "startingKm", "actualKm", "amount", "category", "status"] as const;
+
+function sanitize(payload: any): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!payload || typeof payload !== "object") return out;
+  for (const key of SAFE_FIELDS) {
+    if (payload[key] !== undefined && payload[key] !== null) out[key] = payload[key];
+  }
+  return out;
 }
 
 /**
- * Broadcast an event to all connected clients in real-time
+ * Publish an event to every connected app through Supabase Realtime
+ * (Broadcast, REST endpoint). This is one short HTTP call — the server holds
+ * no open connections, so it costs nothing while idle on serverless.
  */
 export function broadcastRealtimeEvent(type: RealtimeEventType, payload: any): void {
+  if (!supabaseKey) return;
+
   const message: RealtimeMessage = {
     type,
-    payload,
+    payload: sanitize(payload),
     timestamp: new Date().toISOString(),
   };
 
-  const payloadStr = JSON.stringify(message);
-
-  clients.forEach((client) => {
-    try {
-      client.write(`event: message\ndata: ${payloadStr}\n\n`);
-    } catch {
-      clients.delete(client);
-    }
-  });
+  fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+    method: "POST",
+    headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ messages: [{ topic: REALTIME_TOPIC, event: "message", payload: message, private: false }] }),
+    signal: AbortSignal.timeout(5000),
+  }).catch((err) => console.warn("[realtime] broadcast failed:", err?.message));
 }
-
-/**
- * Keep-alive heartbeat ticker every 20 seconds to prevent connection timeouts
- */
-setInterval(() => {
-  clients.forEach((client) => {
-    try {
-      client.write(`: heartbeat\n\n`);
-    } catch {
-      clients.delete(client);
-    }
-  });
-}, 20000);
