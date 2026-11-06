@@ -1,5 +1,5 @@
 [build]
-  command = "pnpm --filter @workspace/ng-travels run build"
+  command = "pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/ng-travels run build"
   publish = "artifacts/ng-travels/dist/public"
 
 [build.environment]
