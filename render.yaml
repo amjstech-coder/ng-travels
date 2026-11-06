@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: ng-travels-api
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 10000
+      # Set these in the Render dashboard (copy from your old Vercel project):
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
