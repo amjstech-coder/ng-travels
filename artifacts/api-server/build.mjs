@@ -129,19 +129,6 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     outdir: rootApiDir,
     outExtension: { ".js": ".js" },
   });
-
-  // 3. Build Netlify function (netlify/functions/api/index.cjs)
-  await esbuild({
-    ...commonOptions,
-    plugins: [],
-    // CommonJS: the Lambda runtime failed to load the ESM bundle ("Unexpected token 'export'")
-    format: "cjs",
-    banner: {},
-    define: { "process.env.NODE_ENV": '"production"' },
-    entryPoints: { index: path.resolve(artifactDir, "src/netlify.ts") },
-    outdir: path.resolve(artifactDir, "../../netlify/functions/api"),
-    outExtension: { ".js": ".cjs" },
-  });
 }
 
 buildAll().catch((err) => {

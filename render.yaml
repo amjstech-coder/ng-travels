@@ -20,3 +20,16 @@ services:
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
+      - key: CRON_SECRET
+        sync: false
+
+  # Replaces the Vercel cron: daily at 03:00 UTC, calls the API cleanup endpoint.
+  - type: cron
+    name: ng-travels-cleanup-trip-images
+    runtime: node
+    schedule: "0 3 * * *"
+    buildCommand: echo skip
+    startCommand: curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://ng-travels-api.onrender.com/api/cron/cleanup-trip-images
+    envVars:
+      - key: CRON_SECRET
+        sync: false

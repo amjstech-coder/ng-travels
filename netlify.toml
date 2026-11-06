@@ -1,19 +1,9 @@
 [build]
-  command = "pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/ng-travels run build"
+  command = "pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/ng-travels run build"
   publish = "artifacts/ng-travels/dist/public"
-
-[functions]
-  directory = "netlify/functions"
-
-# api/index.mjs is already a self-contained ESM bundle (built by api-server's build.mjs);
-# re-bundling it as CJS breaks import.meta.
-[functions.api]
-  node_bundler = "none"
 
 [build.environment]
   NODE_VERSION = "22"
-  # Function runtime: supabase-js realtime needs native WebSocket (Node 22+)
-  AWS_LAMBDA_JS_RUNTIME = "nodejs22.x"
   PNPM_FLAGS = "--no-frozen-lockfile"
   PNPM_VERSION = "9.15.9"
   # Secrets scanning flags short/public values (NODE_ENV, PORT) and the public
@@ -21,10 +11,10 @@
   # Real secrets (DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are NOT omitted.
   SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT,SUPABASE_URL,BASE_URL,VITE_API_URL,VITE_SUPABASE_URL,VITE_SUPABASE_ANON_KEY,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,GEOAPIFY_API_KEY"
 
-# /api/* is served by the Express app running as a Netlify Function
+# Reverse-proxy /api/* to the Express API hosted on Render (avoids CORS on web)
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/api/api/:splat"
+  to = "https://ng-travels-api.onrender.com/api/:splat"
   status = 200
   force = true
 

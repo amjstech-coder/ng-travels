@@ -59,6 +59,3 @@ dist-apk/
 .env.*.local
 .env.production
 .netlify
-
-# netlify function build output
-netlify/functions/api/
