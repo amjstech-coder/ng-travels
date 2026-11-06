@@ -129,6 +129,16 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     outdir: rootApiDir,
     outExtension: { ".js": ".js" },
   });
+
+  // 3. Build Netlify function (netlify/functions/api/index.mjs)
+  await esbuild({
+    ...commonOptions,
+    plugins: [],
+    define: { "process.env.NODE_ENV": '"production"' },
+    entryPoints: { index: path.resolve(artifactDir, "src/netlify.ts") },
+    outdir: path.resolve(artifactDir, "../../netlify/functions/api"),
+    outExtension: { ".js": ".mjs" },
+  });
 }
 
 buildAll().catch((err) => {

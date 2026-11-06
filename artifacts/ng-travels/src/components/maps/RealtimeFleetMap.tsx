@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/apiFetch";
+import { supabase } from "@/lib/supabase/client";
 import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -482,14 +483,39 @@ export const RealtimeFleetMap: React.FC<RealtimeFleetMapProps> = ({
       }
     };
 
+    const applyPoint = (row: any) => {
+      const lat = Number(row.latitude);
+      const lng = Number(row.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      setTelemetry((prev) => ({
+        ...prev,
+        speed: Number(row.speed ?? prev.speed),
+        lat,
+        lng,
+        gpsSignal: "GPS Synced",
+        heading: Number(row.heading ?? prev.heading),
+      }));
+      vehicleMarkerRef.current?.setLatLng([lat, lng]);
+    };
+
+    // Initial position, then live pushes from Supabase Realtime (driver_locations inserts)
     pollLiveGps();
-    // Matches the driver app's 15s upload cadence — polling faster just
-    // re-reads the same position. Paused while the tab is hidden.
+    const channel = supabase
+      .channel(`live_location_trip_${activeTrip.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "driver_locations", filter: `trip_id=eq.${activeTrip.id}` },
+        (payload) => applyPoint(payload.new),
+      )
+      .subscribe();
+
+    // Slow safety-net poll in case the realtime socket drops
     timer = setInterval(() => {
       if (document.visibilityState === "visible") pollLiveGps();
-    }, 15000);
+    }, 60000);
     return () => {
       if (timer) clearInterval(timer);
+      supabase.removeChannel(channel);
     };
   }, [isLiveTrip, activeTrip?.id, pickupCoords[0], pickupCoords[1], destCoords[0], destCoords[1]]);
 

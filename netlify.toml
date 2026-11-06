@@ -1,20 +1,24 @@
 [build]
-  command = "pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/ng-travels run build"
+  command = "pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/ng-travels run build"
   publish = "artifacts/ng-travels/dist/public"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
 
 [build.environment]
   NODE_VERSION = "20"
   PNPM_FLAGS = "--no-frozen-lockfile"
   PNPM_VERSION = "9.15.9"
 
-# Reverse Proxy /api/* to production backend (avoids CORS issues on web)
+# /api/* is served by the Express app running as a Netlify Function
 [[redirects]]
   from = "/api/*"
-  to = "https://comforting-frangollo-a90020.netlify.app"
+  to = "/.netlify/functions/api/api/:splat"
   status = 200
   force = true
 
-# SPA fallback: ensure all React Router / Wouter URLs resolve to index.html
+# SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
