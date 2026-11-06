@@ -11,7 +11,9 @@
   node_bundler = "none"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
+  # Function runtime: supabase-js realtime needs native WebSocket (Node 22+)
+  AWS_LAMBDA_JS_RUNTIME = "nodejs22.x"
   PNPM_FLAGS = "--no-frozen-lockfile"
   PNPM_VERSION = "9.15.9"
   # Secrets scanning flags short/public values (NODE_ENV, PORT) and the public
